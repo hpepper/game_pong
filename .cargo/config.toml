@@ -1,0 +1,6 @@
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+[build]
+target-dir = "/tmp/rust_build/pong_target"
+
+
+#  cargo build --target-dir /tmp/rust_build/pong_target
