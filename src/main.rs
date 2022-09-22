@@ -174,6 +174,23 @@ fn setup_pong_game(mut commands: Commands, _asset_server: Res<AssetServer>) {
             ..default()
         })
         .insert(Collider);
+    // top bante
+    commands
+        .spawn()
+        .insert(Bante)
+        .insert_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(VIEW_WIDTH / 2.0,  VIEW_HEIGHT - BANTE_THICKNESS / 2.0, 0.0),
+                scale: BANTE_SIZE,
+                ..default()
+            },
+            sprite: Sprite {
+                color: BANTE_COLOR,
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Collider);
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -241,6 +258,7 @@ ball_query - is not a parm, it just get done at the start TODO why?
 fn check_for_collisions(
     mut _commands: Commands,
     mut ball_query: Query<(&mut Velocity, &Transform), With<Ball>>,
+    paddle_query: Query<(&Transform), With<Paddle>>,
     bante_query: Query<(Entity, &Transform), With<Bante>>,
 ) {
     // TODO what is transform?
@@ -263,8 +281,46 @@ fn check_for_collisions(
         // TODO now move the ball left, when the ball is started again (in the center)
     }
     let ball_size = ball_transform.scale.truncate();
+    // check collision with paddle
+    // TODO fix the distance so the ball 'hits' the paddle)
+    for transform in &paddle_query {
+        let collision = collide(
+            ball_transform.translation,
+            ball_size,
+            transform.translation,
+            transform.scale.truncate(),
+        );
+        if let Some(collision) = collision {
+            // Sends a collision event so that other systems can react to the collision
+            // TODO do I need this??? collision_events.send_default();
+
+            // reflect the ball when it collides
+            let mut reflect_x = false;
+            let mut reflect_y = false;
+
+            // only reflect if the ball's velocity is going in the opposite direction of the
+            // collision
+            match collision {
+                Collision::Left => reflect_x = ball_velocity.x > 0.0,
+                Collision::Right => reflect_x = ball_velocity.x < 0.0,
+                Collision::Top => reflect_y = ball_velocity.y < 0.0,
+                Collision::Bottom => reflect_y = ball_velocity.y > 0.0,
+                Collision::Inside => { /* do nothing */ }
+            }
+
+            // reflect velocity on the x-axis if we hit something on the x-axis
+            if reflect_x {
+                ball_velocity.x = -ball_velocity.x;
+            }
+
+            // reflect velocity on the y-axis if we hit something on the y-axis
+            if reflect_y {
+                ball_velocity.y = -ball_velocity.y;
+            }
+        }
+    }
     // check collision with walls
-    for (collider_entity, transform) in &bante_query {
+    for (_collider_entity, transform) in &bante_query {
         let collision = collide(
             ball_transform.translation,
             ball_size,

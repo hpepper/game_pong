@@ -1,0 +1,23 @@
+add score update, when the ball goes byeond back wall
+start ball in the middle(using space) move towards winner (start with space(or A on paddle))
+add score board
+add max points(10)
+add sound for bounce(later do different sounds for bante and paddle)
+add support for simple pads(dpad up/down)
+add support for ball(spin/speed/direction) when hitting a paddle that is in motion.
+
+
+add support for pads
+add support for four players (and three players, by splitting the pad and marking it for each player)
+add ball
+add Collision detection
+add Right paddle(with keys to control is (shift/ctl oer a/z)
+move ball
+add sound
+count points
+
+--
+change speed of ball, when someone leads by more than 1 point
+
+stop at max points
+stop at max time
