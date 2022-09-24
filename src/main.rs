@@ -42,6 +42,13 @@ const BOTTOM_BOUND: f32 =
     BOTTOM_BANTE + BANTE_THICKNESS / 2.0 + PADDLE_SIZE.y / 2.0 + PADDLE_PADDING;
 const TOP_BOUND: f32 = TOP_BANTE - BANTE_THICKNESS / 2.0 - PADDLE_SIZE.y / 2.0 - PADDLE_PADDING;
 
+const SCOREBOARD_FONT_SIZE: f32 = 40.0;
+const SCOREBOARD_TEXT_TOP_PADDING: Val = Val::Px(5.0);
+const SCOREBOARD_TEXT_LEFT_PADDING: Val = Val::Px(VIEW_WIDTH/2.0);
+
+const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
+const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
+
 /*
 
 // x coordinates
@@ -65,6 +72,11 @@ struct Collider;
 #[derive(Component, Deref, DerefMut)]
 struct Velocity(Vec2);
 
+struct Scoreboard {
+    left_player_score: usize,
+    right_player_score: usize,
+}
+
 fn main() {
     println!("Bevy - pong 0.1.0");
     // Systems run in parallel
@@ -76,6 +88,7 @@ fn main() {
             title: "PONG 0.1.0".to_string(),
             ..Default::default()
         })
+        .insert_resource(Scoreboard { left_player_score: 0, right_player_score: 0 })
         .add_startup_system(spawn_camera)
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_pong_game)
@@ -86,11 +99,12 @@ fn main() {
                 .with_system(move_paddle)
                 .with_system(apply_velocity),
         )
+        .add_system(update_scoreboard)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
 
-fn setup_pong_game(mut commands: Commands, _asset_server: Res<AssetServer>) {
+fn setup_pong_game(mut commands: Commands, asset_server: Res<AssetServer>) {
     // The screen randomly does not show the paddle, re-running a couple of times
     //   and it will turn up.
 
@@ -113,7 +127,7 @@ fn setup_pong_game(mut commands: Commands, _asset_server: Res<AssetServer>) {
         ..default()
     });
 
-    // left paddle
+    // right paddle
     commands.spawn().insert(Paddle).insert_bundle(SpriteBundle {
         transform: Transform {
             translation: Vec3::new(RIGHT_PADDLE_A_X, COMMON_PADDLE_Y, 0.0),
@@ -157,6 +171,34 @@ fn setup_pong_game(mut commands: Commands, _asset_server: Res<AssetServer>) {
         })
         .insert(Velocity(INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED));
 
+    // Scoreboard
+    commands.spawn_bundle(
+        TextBundle::from_sections([
+            TextSection::new(
+                "Score: ",
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: SCOREBOARD_FONT_SIZE,
+                    color: TEXT_COLOR,
+                },
+            ),
+            TextSection::from_style(TextStyle {
+                font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                font_size: SCOREBOARD_FONT_SIZE,
+                color: SCORE_COLOR,
+            }),
+        ])
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                top: SCOREBOARD_TEXT_TOP_PADDING,
+                left: SCOREBOARD_TEXT_LEFT_PADDING,
+                ..default()
+            },
+            ..default()
+        }),
+    );
+
     // bottom bante
     commands
         .spawn()
@@ -180,7 +222,7 @@ fn setup_pong_game(mut commands: Commands, _asset_server: Res<AssetServer>) {
         .insert(Bante)
         .insert_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(VIEW_WIDTH / 2.0,  VIEW_HEIGHT - BANTE_THICKNESS / 2.0, 0.0),
+                translation: Vec3::new(VIEW_WIDTH / 2.0, VIEW_HEIGHT - BANTE_THICKNESS / 2.0, 0.0),
                 scale: BANTE_SIZE,
                 ..default()
             },
@@ -257,6 +299,7 @@ ball_query - is not a parm, it just get done at the start TODO why?
  */
 fn check_for_collisions(
     mut _commands: Commands,
+    mut scoreboard: ResMut<Scoreboard>,
     mut ball_query: Query<(&mut Velocity, &Transform), With<Ball>>,
     paddle_query: Query<(&Transform), With<Paddle>>,
     bante_query: Query<(Entity, &Transform), With<Bante>>,
@@ -275,10 +318,20 @@ fn check_for_collisions(
             "DDD ball exit stage right: pos {}",
             ball_transform.translation
         );
-        ball_velocity.x = 0.0;
-        ball_velocity.y = 0.0;
-        // TODO give points to left player
-        // TODO now move the ball left, when the ball is started again (in the center)
+        // give points to left player
+        scoreboard.left_player_score += 1;
+        // now move the ball left, when the ball is started again (in the center)
+        ball_velocity.x = -ball_velocity.x;
+        // TODO tranport the ball to the center
+    }
+    if ball_x <= 0.0 {
+        println!(
+            "DDD ball exit stage left: pos {}",
+            ball_transform.translation
+        );
+        scoreboard.right_player_score += 1;
+        ball_velocity.x = -ball_velocity.x;
+        //ball_velocity.y = 0.0;
     }
     let ball_size = ball_transform.scale.truncate();
     // check collision with paddle
@@ -356,4 +409,10 @@ fn check_for_collisions(
             }
         }
     }
+}
+
+fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
+    let mut text = query.single_mut();
+    text.sections[0].value = scoreboard.left_player_score.to_string();
+    text.sections[1].value = scoreboard.right_player_score.to_string();
 }

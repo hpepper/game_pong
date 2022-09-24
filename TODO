@@ -1,4 +1,3 @@
-add score update, when the ball goes byeond back wall
 start ball in the middle(using space) move towards winner (start with space(or A on paddle))
 add score board
 add max points(10)
