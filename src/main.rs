@@ -3,7 +3,7 @@ use bevy::{
     render::camera::ScalingMode,
     sprite::collide_aabb::{collide, Collision},
     time::FixedTimestep,
-    window::WindowMode,
+    //window::WindowMode,
 };
 
 // 1280x720 = HD ready
@@ -300,13 +300,13 @@ ball_query - is not a parm, it just get done at the start TODO why?
 fn check_for_collisions(
     mut _commands: Commands,
     mut scoreboard: ResMut<Scoreboard>,
-    mut ball_query: Query<(&mut Velocity, &Transform), With<Ball>>,
-    paddle_query: Query<(&Transform), With<Paddle>>,
-    bante_query: Query<(Entity, &Transform), With<Bante>>,
+    mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
+    paddle_query: Query<&Transform, (With<Paddle>, Without<Ball>)>,
+    bante_query: Query<(Entity, &Transform), (With<Bante>, Without<Ball>)>,
 ) {
     // TODO what is transform?
     // TODO what is translation?(is it the position of the object?)
-    let (mut ball_velocity, ball_transform) = ball_query.single_mut();
+    let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
     //let ball_size = ball_transform.scale.truncate();
     //let collision = collide(ball_transform.translation, ball_size, b_pos, b_size)
     let ball_x = ball_transform.translation[0];
@@ -322,7 +322,8 @@ fn check_for_collisions(
         scoreboard.left_player_score += 1;
         // now move the ball left, when the ball is started again (in the center)
         ball_velocity.x = -ball_velocity.x;
-        // TODO tranport the ball to the center
+        // tranport the ball to the center
+        ball_transform.translation.x = VIEW_WIDTH/2.0;
     }
     if ball_x <= 0.0 {
         println!(
@@ -332,6 +333,8 @@ fn check_for_collisions(
         scoreboard.right_player_score += 1;
         ball_velocity.x = -ball_velocity.x;
         //ball_velocity.y = 0.0;
+        // tranport the ball to the center
+        ball_transform.translation.x = VIEW_WIDTH/2.0;
     }
     let ball_size = ball_transform.scale.truncate();
     // check collision with paddle
