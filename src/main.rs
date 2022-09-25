@@ -19,7 +19,8 @@ const PADDLE_PADDING: f32 = 10.0;
 
 // TODO make this changable later
 const PADDLE_SIZE: Vec3 = Vec3::new(20.0, 120.0, 0.0);
-const PADDLE_COLOR: Color = Color::rgb(0.3, 0.3, 0.7);
+const LEFT_PADDLE_COLOR: Color = Color::BLUE;
+const RIGHT_PADDLE_COLOR: Color = Color::YELLOW_GREEN;
 
 const BALL_SPEED: f32 = 400.0;
 const BALL_SIZE: Vec3 = Vec3::new(30.0, 30.0, 0.0);
@@ -44,10 +45,7 @@ const TOP_BOUND: f32 = TOP_BANTE - BANTE_THICKNESS / 2.0 - PADDLE_SIZE.y / 2.0 -
 
 const SCOREBOARD_FONT_SIZE: f32 = 40.0;
 const SCOREBOARD_TEXT_TOP_PADDING: Val = Val::Px(5.0);
-const SCOREBOARD_TEXT_LEFT_PADDING: Val = Val::Px(VIEW_WIDTH/2.0);
-
-const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
-const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
+const SCOREBOARD_TEXT_LEFT_PADDING: Val = Val::Px(VIEW_WIDTH / 2.0);
 
 /*
 
@@ -69,6 +67,9 @@ struct Bante;
 #[derive(Component)]
 struct Collider;
 
+// Currently used for playing sound when the ball hits something
+#[derive(Default)]
+struct CollisionEvent;
 #[derive(Component, Deref, DerefMut)]
 struct Velocity(Vec2);
 
@@ -76,6 +77,8 @@ struct Scoreboard {
     left_player_score: usize,
     right_player_score: usize,
 }
+
+struct CollisionSound(Handle<AudioSource>);
 
 fn main() {
     println!("Bevy - pong 0.1.0");
@@ -88,16 +91,21 @@ fn main() {
             title: "PONG 0.1.0".to_string(),
             ..Default::default()
         })
-        .insert_resource(Scoreboard { left_player_score: 0, right_player_score: 0 })
+        .insert_resource(Scoreboard {
+            left_player_score: 0,
+            right_player_score: 0,
+        })
         .add_startup_system(spawn_camera)
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_pong_game)
+        .add_event::<CollisionEvent>()
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                 .with_system(check_for_collisions)
                 .with_system(move_paddle)
-                .with_system(apply_velocity),
+                .with_system(apply_velocity)
+                .with_system(play_collision_sound.after(check_for_collisions)),
         )
         .add_system(update_scoreboard)
         .add_system(bevy::window::close_on_esc)
@@ -113,6 +121,10 @@ fn setup_pong_game(mut commands: Commands, asset_server: Res<AssetServer>) {
         LEFT_PADDLE_A_X, COMMON_PADDLE_Y
     );
 
+    // Sound
+    let ball_collision_sound = asset_server.load("sounds/breakout_collision.ogg");
+    commands.insert_resource(CollisionSound(ball_collision_sound));
+
     // left paddle
     commands.spawn().insert(Paddle).insert_bundle(SpriteBundle {
         transform: Transform {
@@ -121,7 +133,7 @@ fn setup_pong_game(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         sprite: Sprite {
-            color: PADDLE_COLOR,
+            color: LEFT_PADDLE_COLOR,
             ..default()
         },
         ..default()
@@ -135,7 +147,7 @@ fn setup_pong_game(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         sprite: Sprite {
-            color: PADDLE_COLOR,
+            color: RIGHT_PADDLE_COLOR,
             ..default()
         },
         ..default()
@@ -175,17 +187,17 @@ fn setup_pong_game(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn_bundle(
         TextBundle::from_sections([
             TextSection::new(
-                "Score: ",
+                "",
                 TextStyle {
                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                     font_size: SCOREBOARD_FONT_SIZE,
-                    color: TEXT_COLOR,
+                    color: LEFT_PADDLE_COLOR,
                 },
             ),
             TextSection::from_style(TextStyle {
                 font: asset_server.load("fonts/FiraMono-Medium.ttf"),
                 font_size: SCOREBOARD_FONT_SIZE,
-                color: SCORE_COLOR,
+                color: RIGHT_PADDLE_COLOR,
             }),
         ])
         .with_style(Style {
@@ -303,6 +315,7 @@ fn check_for_collisions(
     mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
     paddle_query: Query<&Transform, (With<Paddle>, Without<Ball>)>,
     bante_query: Query<(Entity, &Transform), (With<Bante>, Without<Ball>)>,
+    mut collision_events: EventWriter<CollisionEvent>,
 ) {
     // TODO what is transform?
     // TODO what is translation?(is it the position of the object?)
@@ -323,9 +336,10 @@ fn check_for_collisions(
         // now move the ball left, when the ball is started again (in the center)
         ball_velocity.x = -ball_velocity.x;
         // tranport the ball to the center
-        ball_transform.translation.x = VIEW_WIDTH/2.0;
+        ball_transform.translation.x = VIEW_WIDTH / 2.0;
     }
     if ball_x <= 0.0 {
+        // TODO play a sound when the ball exit the field
         println!(
             "DDD ball exit stage left: pos {}",
             ball_transform.translation
@@ -334,7 +348,7 @@ fn check_for_collisions(
         ball_velocity.x = -ball_velocity.x;
         //ball_velocity.y = 0.0;
         // tranport the ball to the center
-        ball_transform.translation.x = VIEW_WIDTH/2.0;
+        ball_transform.translation.x = VIEW_WIDTH / 2.0;
     }
     let ball_size = ball_transform.scale.truncate();
     // check collision with paddle
@@ -348,7 +362,7 @@ fn check_for_collisions(
         );
         if let Some(collision) = collision {
             // Sends a collision event so that other systems can react to the collision
-            // TODO do I need this??? collision_events.send_default();
+            collision_events.send_default();
 
             // reflect the ball when it collides
             let mut reflect_x = false;
@@ -385,7 +399,7 @@ fn check_for_collisions(
         );
         if let Some(collision) = collision {
             // Sends a collision event so that other systems can react to the collision
-            // TODO do I need this??? collision_events.send_default();
+            collision_events.send_default();
 
             // reflect the ball when it collides
             let mut reflect_x = false;
@@ -418,4 +432,17 @@ fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
     let mut text = query.single_mut();
     text.sections[0].value = scoreboard.left_player_score.to_string();
     text.sections[1].value = scoreboard.right_player_score.to_string();
+}
+
+fn play_collision_sound(
+    collision_events: EventReader<CollisionEvent>,
+    audio: Res<Audio>,
+    sound: Res<CollisionSound>,
+) {
+    // Play a sound once per frame if a collision occurred.
+    if !collision_events.is_empty() {
+        // This prevents events staying active on the next frame.
+        collision_events.clear();
+        audio.play(sound.0.clone());
+    }
 }
