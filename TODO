@@ -1,4 +1,3 @@
-add support for speed-up
 add support for webassembly
 add support for ball(spin/speed/direction) when hitting a paddle that is in motion.
 add support for simple pads(dpad up/down)
@@ -9,6 +8,7 @@ add support for four players (and three players, by splitting the pad and markin
 change ball sound
 do different sounds for bante and paddle
 add sound when the ball exit the field
+refactor the code and document the code.
 speed up ball when there have been no points for X seconds
 --
 change speed of ball, when someone leads by more than 1 point

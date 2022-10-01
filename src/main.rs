@@ -3,6 +3,7 @@ use bevy::{
     render::camera::ScalingMode,
     sprite::collide_aabb::{collide, Collision},
     time::FixedTimestep,
+    time::Stopwatch,
     //window::WindowMode,
 };
 
@@ -27,6 +28,10 @@ const BALL_SIZE: Vec3 = Vec3::new(30.0, 30.0, 0.0);
 const BALL_STARTING_POSITION: Vec3 = Vec3::new(640.0, 350.0, 1.0);
 const INITIAL_BALL_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const BALL_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
+
+// five seconds seems to be too short, when the speed increase is 0.1
+const INCREASE_BALL_VELOSITY_AFTER_TIME_WITHOUT_SCORE: f32 = 10.0;
+const DELTA_INCREASE_IN_BALL_SPEED: f32 = 0.05 * BALL_SPEED;
 
 const LEFT_PADDLE_A_X: f32 = 50.0;
 const RIGHT_PADDLE_A_X: f32 = VIEW_WIDTH - 50.0;
@@ -67,6 +72,11 @@ struct Bante;
 #[derive(Component)]
 struct Collider;
 
+// A resource to use for increasing speed when x seconds have passed since last score.
+struct TimeSinceLastScore {
+    stopwatch_timer: Stopwatch,
+}
+
 // Currently used for playing sound when the ball hits something
 #[derive(Default)]
 struct CollisionEvent;
@@ -94,6 +104,9 @@ fn main() {
         .insert_resource(Scoreboard {
             left_player_score: 0,
             right_player_score: 0,
+        })
+        .insert_resource(TimeSinceLastScore {
+            stopwatch_timer: Stopwatch::new(),
         })
         .add_startup_system(spawn_camera)
         .add_plugins(DefaultPlugins)
@@ -315,8 +328,11 @@ fn check_for_collisions(
     mut ball_query: Query<(&mut Velocity, &mut Transform), With<Ball>>,
     paddle_query: Query<&Transform, (With<Paddle>, Without<Ball>)>,
     bante_query: Query<(Entity, &Transform), (With<Bante>, Without<Ball>)>,
+    mut score_time_elapsed: ResMut<TimeSinceLastScore>,
+    time: Res<Time>,
     mut collision_events: EventWriter<CollisionEvent>,
 ) {
+    score_time_elapsed.stopwatch_timer.tick(time.delta());
     // TODO what is transform?
     // TODO what is translation?(is it the position of the object?)
     let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
@@ -337,6 +353,7 @@ fn check_for_collisions(
         ball_velocity.x = -ball_velocity.x;
         // tranport the ball to the center
         ball_transform.translation.x = VIEW_WIDTH / 2.0;
+        score_time_elapsed.stopwatch_timer.reset();
     }
     if ball_x <= 0.0 {
         // TODO play a sound when the ball exit the field
@@ -349,6 +366,29 @@ fn check_for_collisions(
         //ball_velocity.y = 0.0;
         // tranport the ball to the center
         ball_transform.translation.x = VIEW_WIDTH / 2.0;
+        score_time_elapsed.stopwatch_timer.reset();
+    }
+
+    if score_time_elapsed.stopwatch_timer.elapsed_secs()
+        > INCREASE_BALL_VELOSITY_AFTER_TIME_WITHOUT_SCORE
+    {
+        // TODO speed up, set a timer, that gets reset, ever time there is a score
+        //  if the timer is hit then increase the ball velosity.
+        //  later have a directional velocity, so it has one speed going in one direction and onther velocity going in the other direction
+        // TODO at some point, maybe have a speed limit so the paddles have a chance of following along?
+        // Maybe just add a constant number instead of this increasing percentage???
+        if ball_velocity.x > 0.0 {
+            ball_velocity.x += DELTA_INCREASE_IN_BALL_SPEED;
+        } else {
+            ball_velocity.x -= DELTA_INCREASE_IN_BALL_SPEED;
+        }
+        println!(
+            "DDD more than {} secs since last score, increase velosity by {} to {}",
+            score_time_elapsed.stopwatch_timer.elapsed_secs(),
+            DELTA_INCREASE_IN_BALL_SPEED,
+            ball_velocity.x.abs()
+        );
+        score_time_elapsed.stopwatch_timer.reset();
     }
     let ball_size = ball_transform.scale.truncate();
     // check collision with paddle
