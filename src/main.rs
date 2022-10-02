@@ -91,6 +91,10 @@ struct Scoreboard {
 struct CollisionSound(Handle<AudioSource>);
 
 fn main() {
+    // When building for WASM, print panics to the browser console
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+
     println!("Bevy - pong 0.1.0");
     // Systems run in parallel
     App::new()
